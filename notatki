@@ -1,0 +1,188 @@
+useState
+	zalecane jest użycie jednego useState na jedną wartość, a nie jak w przypadku klasy gdzie korzystamy z setState dla wszystkich 	wartości w stanie komponentu, ponieważ w klasowym komponencie nowy stany jest merge'owany ze starym obiektem stanu
+
+useEffect
+	odpalany asynchronicznie PO aktualizacji ekranu
+	setTimeout/setInterval, async calls, localStorage, document.title, odświeżenie stanu z danymi z modala, event handler
+
+useLayoutEffect
+	to samo co useEffect, ale odpalany synchronicznie PRZED aktualizacją ekranu
+	zazwyczaj useEffect będzie wystarczający, ponieważ będzie synchronizował stan/propsy bez potrzebny natychmiastowego odzwierciedlenia zmiany na ekranie
+
+useRef
+	pozwala na pracę z uchwytem elementu DOM, żeby np. podmienić wartość jakiegoś atrybutu
+	przydatne także do trzymania wartości, której zmiana nie powoduje renderowania jak w przypadku zmiany stanu
+
+useContext
+	pozwala na konsumpcję contextu dostarczonego przez inny komponent gdzieś wyżej w hierarchii
+
+useReducer
+	dostarcza funkcjonalność a'la Redux dla pojedynczego komponentu
+	używany w przypadku potrzeby bardziej skomplikowanego zarządzania stanem
+	aktualizacje stanu są pogrupowane logicznie, gdzie przy użyciu useState byłoby to niemożliwe
+	useState pod spodem korzysta właśnie z reducera, który przyjmuje akcję i przypisuje ją do stanu zamiast sprawdzać action.type, a następnie przypisywać action.payload/action.data do stanu
+
+useMemo
+	zapamiętuje wartość otrzymaną przez kosztowną funkcję - działa jak cache
+	operacja blokująca, więc trzeba używać z głową
+	javascript widzi typy primitywne jako równe, a referencje do takich samych obiektów jako nierówne, więc jeżeli chcemy użyć useMemo tylko do tego, by komponenty dzieci się nie renderowały ponownie, to jeżeli wynikiem funkcji jest typ prosty, wtedy nie ma sensu używać memoizacji
+
+useCallback
+	opakowane useMemo, które zapamiętuje funkcję
+	wykorzystanie np. w przypadku, gdy komponent rodzic definiuje funkcję *Handler i przekazuje ją dziecku w propsach - w momencie gdy renderowany jest rodzic, funkcja *Handler się nie zmienia, ale zmienia się referencja do tej funkcji, a komponent dziecko myśli, że propsy się zmieniły, więc też zostaje odświeżony
+	łączy się często z export default React.memo(ChildComponent) by uzyskać funkcyjny odpowiednik klasowego PureComponent (który implementuje domyślną wersję shouldComponentUpdate())
+
+...
+
+npm install eslint-plugin-react-hooks --save-dev
+
+https://reactjs.org/docs/hooks-rules.html
+
+Only Call Hooks at the Top Level
+	Don’t call Hooks inside loops, conditions, or nested functions. Instead, always use Hooks at the top level of your React function. 
+	By following this rule, you ensure that Hooks are called in the same order each time a component renders. 
+	That’s what allows React to correctly preserve the state of Hooks between multiple useState and useEffect calls. 
+
+Only Call Hooks from React Functions
+	Don’t call Hooks from regular JavaScript functions. Instead, you can:
+
+	✅ Call Hooks from React function components.
+	✅ Call Hooks from custom Hooks.
+	By following this rule, you ensure that all stateful logic in a component is clearly visible from its source code.
+
+React relies on the order in which Hooks are called.
+
+...
+
+primitive types - string, number, boolean, null, undefined or symbol
+
+function Example({impressionTracker, propA, propB, propC}) {
+  // keep reference to the initial values         
+  const initialTrackingValues = useRef({
+      tracker: impressionTracker, 
+      params: {
+        propA, 
+        propB, 
+        propC, 
+    }
+  })
+
+  // track impression 
+  useEffect(() => {
+    const { tracker, params } = initialTrackingValues.current;
+    tracker(params)
+  }, []) // you get NO eslint warnings for tracker or params
+
+  return <BeautifulComponent propA={propA} propB={propB} propC={propC} />   
+}
+
+// destrukturyzacja by pozbyć się odwołania do current
+function Bla() {
+  const { current: baz } = useRef([1, 2, 3])
+  return <Foo baz={baz} />
+}
+
+const dataReducer = (state, action) => {
+	switch (action.type) {
+		case "DATA_UPDATE":
+			return { ...state, data: action.payload } // zawsze powinniśmy użyć spreada ... żeby nie stracić przypadkiem jakichś właściwości stanu
+		default:
+			return state; // albo ewentualnie throw new Error();
+	}
+}
+
+const [state, dispatch] = useReducer(dataReducer, { data: "" });
+dispatch({ type: "DATA_UPDATE", payload: "data entry" });
+
+
+const [state, setState] = useState("");
+const [state, setState] = useReducer((state, action) => { 
+	state = action; 
+	return state;
+}, "");
+
+
+Store with Context
+store.js
+	import React from 'react'
+
+	export const StoreContext = React.createContext(null)
+
+	export default ({ children }) => {
+	  const teamMembersNames = ['John', 'Mary', 'Jason', 'David']
+
+	  const [sharing, setSharing] = React.useState([])
+	  const [help, setHelp] = React.useState([])
+	  const [pairing, setPairing] = React.useState(teamMembersNames)
+
+	  const store = {
+		sharing: [sharing, setSharing],
+		help: [help, setHelp],
+		pairing: [pairing, setPairing],
+	  }
+
+	  return <StoreContext.Provider value={store}>{children}</StoreContext.Provider>
+	}
+	
+index.js
+	import React from 'react'
+	import ReactDOM from 'react-dom'
+
+	import App from './App'
+	import StoreProvider from './utils/store'
+
+	ReactDOM.render(
+	  <StoreProvider>
+		<App />
+	  </StoreProvider>,
+	  document.getElementById('root')
+	)
+
+App.js
+	import React from 'react'
+	import InputSection from './components/input-section'
+
+	const App = () => {
+
+	  return (
+	  <>
+	    <SomeComponent />
+		<InputSection type="sharing" />
+	  </>
+	  )
+	}
+	
+SomeComponent.js
+	import React from 'react'
+	import { StoreContext } from '../utils/store'
+
+	const SomeComponent = () => {
+	  // to fetch the sharing data
+	  const { sharing } = React.useContext(StoreContext)
+	}
+	
+InputSection
+	import React from 'react'
+	import { StoreContext } from '../utils/store'
+
+	export default ({ type }) => {
+	  const [input, setInput] = React.useState('')
+	  const {
+		[type]: [data, setData], // type === "sharing", więc tak jakby odwołujemy się do elementu sharing w Store, który jest tablicą zwróconą przez useState, czyli [sharing, setSharing] i przypisujemy ją odpowiednio do [data, setData]
+	  } = React.useContext(StoreContext)
+
+	  return (
+		<div>
+		  <ul>
+			{data.map(d => (
+			  <li>{d}</li>
+			))}
+		  </ul>
+		  <input
+			type="text"
+			value={input}
+			onChange={e => setData([e, ...data])}
+		  />
+		</div>
+	  )
+	}
